@@ -58,30 +58,44 @@ async def stream_outlines(
                 (presentation.n_slides - needed_toc_count) / 10
             )
 
-        async for chunk in generate_ppt_outline(
-            presentation.content,
-            n_slides_to_generate,
-            presentation.language,
-            additional_context,
-            presentation.tone,
-            presentation.verbosity,
-            presentation.instructions,
-            presentation.include_title_slide,
-            presentation.web_search,
-        ):
-            # Give control to the event loop
-            await asyncio.sleep(0)
+        # Retry logic for outline generation
+        for attempt in range(3): # Retry up to 3 times
+            presentation_outlines_text = ""
+            async for chunk in generate_ppt_outline(
+                presentation.content,
+                n_slides_to_generate,
+                presentation.language,
+                additional_context,
+                presentation.tone,
+                presentation.verbosity,
+                presentation.instructions,
+                presentation.include_title_slide,
+                presentation.web_search,
+            ):
+                # Give control to the event loop
+                await asyncio.sleep(0)
 
-            if isinstance(chunk, HTTPException):
-                yield SSEErrorResponse(detail=chunk.detail).to_string()
-                return
+                if isinstance(chunk, HTTPException):
+                    yield SSEErrorResponse(detail=chunk.detail).to_string()
+                    return
+                
+                yield SSEResponse(
+                    event="response",
+                    data=json.dumps({"type": "chunk", "chunk": chunk}),
+                ).to_string()
+                presentation_outlines_text += chunk
 
-            yield SSEResponse(
-                event="response",
-                data=json.dumps({"type": "chunk", "chunk": chunk}),
+            if presentation_outlines_text.strip():
+                break # Exit loop if we have content
+            
+            print(f"Streaming outline generation failed on attempt {attempt + 1}. Retrying...")
+            await asyncio.sleep(1) # Wait a second before retrying
+
+        if not presentation_outlines_text.strip():
+            yield SSEErrorResponse(
+                detail="Failed to generate presentation outlines after multiple attempts. The model may be unresponsive or failing to generate content."
             ).to_string()
-
-            presentation_outlines_text += chunk
+            return
 
         try:
             presentation_outlines_json = dict(
@@ -90,7 +104,7 @@ async def stream_outlines(
         except Exception as e:
             traceback.print_exc()
             yield SSEErrorResponse(
-                detail=f"Failed to generate presentation outlines. Please try again. {str(e)}",
+                detail=f"Failed to parse presentation outlines from the AI model. Please try again. Error: {str(e)}",
             ).to_string()
             return
 
@@ -100,8 +114,11 @@ async def stream_outlines(
             :n_slides_to_generate
         ]
 
-        presentation.outlines = presentation_outlines.model_dump()
-        presentation.title = get_presentation_title_from_outlines(presentation_outlines)
+        # Save outlines as soon as they are generated and parsed
+        presentation.outlines = presentation_outlines.model_dump(mode="json")
+        presentation.title = get_presentation_title_from_outlines(
+            presentation_outlines
+        )
 
         sql_session.add(presentation)
         await sql_session.commit()

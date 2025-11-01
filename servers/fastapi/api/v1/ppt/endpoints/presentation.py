@@ -532,24 +532,34 @@ async def generate_presentation_handler(
                     (request.n_slides - needed_toc_count) / 10
                 )
 
-            presentation_outlines_text = ""
-            async for chunk in generate_ppt_outline(
-                request.content,
-                n_slides_to_generate,
-                request.language,
-                additional_context,
-                request.tone.value,
-                request.verbosity.value,
-                request.instructions,
-                request.include_title_slide,
-                request.web_search,
-            ):
+            # Retry logic for outline generation
+            for attempt in range(3):  # Retry up to 3 times
+                presentation_outlines_text = ""
+                async for chunk in generate_ppt_outline(
+                    request.content,
+                    n_slides_to_generate,
+                    request.language,
+                    additional_context,
+                    request.tone.value,
+                    request.verbosity.value,
+                    request.instructions,
+                    request.include_title_slide,
+                    request.web_search,
+                ):
+                    if isinstance(chunk, HTTPException):
+                        raise chunk
+                    presentation_outlines_text += chunk
 
-                if isinstance(chunk, HTTPException):
-                    raise chunk
-
-                presentation_outlines_text += chunk
-
+                if presentation_outlines_text.strip():
+                    break  # Exit loop if we have content
+                
+                print(f"Outline generation failed on attempt {attempt + 1}. Retrying...")
+                await asyncio.sleep(1) # Wait a second before retrying
+            
+            if not presentation_outlines_text.strip():
+                raise HTTPException(
+                    status_code=500, detail="Failed to generate presentation outlines after multiple attempts. The model may be unresponsive or failing to generate content."
+                )
             try:
                 presentation_outlines_json = dict(
                     dirtyjson.loads(presentation_outlines_text)
@@ -558,7 +568,7 @@ async def generate_presentation_handler(
                 traceback.print_exc()
                 raise HTTPException(
                     status_code=400,
-                    detail="Failed to generate presentation outlines. Please try again.",
+                    detail="Failed to parse presentation outlines from the AI model. Please try again.",
                 )
             presentation_outlines = PresentationOutlineModel(
                 **presentation_outlines_json
