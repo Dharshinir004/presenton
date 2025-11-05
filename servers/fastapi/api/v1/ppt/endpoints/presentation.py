@@ -533,6 +533,8 @@ async def generate_presentation_handler(
                 )
 
             # Retry logic for outline generation
+            # Retry logic for outline generation and parsing
+            presentation_outlines_json = None
             for attempt in range(3):  # Retry up to 3 times
                 presentation_outlines_text = ""
                 async for chunk in generate_ppt_outline(
@@ -549,17 +551,49 @@ async def generate_presentation_handler(
                     if isinstance(chunk, HTTPException):
                         raise chunk
                     presentation_outlines_text += chunk
+                try:
+                    async for chunk in generate_ppt_outline(
+                        request.content,
+                        n_slides_to_generate,
+                        request.language,
+                        additional_context,
+                        request.tone.value,
+                        request.verbosity.value,
+                        request.instructions,
+                        request.include_title_slide,
+                        request.web_search,
+                    ):
+                        if isinstance(chunk, HTTPException):
+                            raise chunk
+                        presentation_outlines_text += chunk
 
-                if presentation_outlines_text.strip():
-                    break  # Exit loop if we have content
+                    if presentation_outlines_text.strip():
+                        break  # Exit loop if we have content
+                    
+                    print(f"Outline generation failed on attempt {attempt + 1}. Retrying...")
+                    await asyncio.sleep(1) # Wait a second before retrying
                 
-                print(f"Outline generation failed on attempt {attempt + 1}. Retrying...")
-                await asyncio.sleep(1) # Wait a second before retrying
-            
-            if not presentation_outlines_text.strip():
-                raise HTTPException(
-                    status_code=500, detail="Failed to generate presentation outlines after multiple attempts. The model may be unresponsive or failing to generate content."
-                )
+                    if not presentation_outlines_text.strip():
+                            if presentation_outlines_text.strip():
+                                # Attempt to parse as strict JSON first
+                                presentation_outlines_json = dict(json.loads(presentation_outlines_text))
+                                break  # Success, exit retry loop
+                except json.JSONDecodeError:
+                    print(f"Strict JSON parsing failed on attempt {attempt + 1}. Trying with dirtyjson.")
+                    try:
+                        presentation_outlines_json = dict(dirtyjson.loads(presentation_outlines_text))
+                        break # Success with dirtyjson, exit retry loop
+                    except Exception:
+                        print(f"dirtyjson also failed on attempt {attempt + 1}. Retrying generation.")
+                        await asyncio.sleep(2) # Wait before retrying the LLM call
+                except Exception as e:
+                    print(f"An unexpected error occurred during outline generation on attempt {attempt + 1}: {e}")
+                    await asyncio.sleep(2)
+
+            if not presentation_outlines_json:
+                raise HTTPException(status_code=500, detail="Failed to generate presentation outlines after multiple attempts. The model may be unresponsive or failing to generate content.",
+                    status_code=500, detail="Failed to generate and parse presentation outlines after multiple attempts. The model may be unresponsive or returning malformed data.")
+                
             try:
                 presentation_outlines_json = dict(
                     dirtyjson.loads(presentation_outlines_text)
@@ -570,6 +604,7 @@ async def generate_presentation_handler(
                     status_code=400,
                     detail="Failed to parse presentation outlines from the AI model. Please try again.",
                 )
+
             presentation_outlines = PresentationOutlineModel(
                 **presentation_outlines_json
             )
