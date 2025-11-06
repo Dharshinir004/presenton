@@ -68,6 +68,74 @@ from utils.process_slides import (
 import uuid
 
 
+def extract_json_from_response(response_text: str) -> dict:
+    """
+    Extract and validate JSON from potentially malformed model response
+    """
+    if not response_text or response_text.strip() == "":
+        raise ValueError("Empty response from model")
+    
+    cleaned = response_text.strip()
+    
+    # Remove markdown code blocks if present
+    if cleaned.startswith('```json'):
+        cleaned = cleaned[7:]
+    elif cleaned.startswith('```'):
+        cleaned = cleaned[3:]
+    
+    if cleaned.endswith('```'):
+        cleaned = cleaned[:-3]
+    
+    # Remove any text before the first { and after the last }
+    start_idx = cleaned.find('{')
+    end_idx = cleaned.rfind('}') + 1
+    
+    if start_idx == -1 or end_idx == 0:
+        raise ValueError("No JSON object found in response")
+    
+    json_str = cleaned[start_idx:end_idx].strip()
+    
+    # Try strict JSON parsing first
+    try:
+        return json.loads(json_str)
+    except json.JSONDecodeError as e:
+        print(f"Standard JSON parsing failed: {e}")
+        # Fallback to dirtyjson with better error handling
+        try:
+            return dirtyjson.loads(json_str)
+        except Exception as dirty_error:
+            print(f"DirtyJSON parsing also failed: {dirty_error}")
+            print(f"Problematic JSON string: {json_str[:500]}...")
+            raise ValueError(f"Failed to parse JSON response: {dirty_error}")
+
+
+def validate_presentation_outlines(data: dict) -> bool:
+    """
+    Validate that the parsed data has the expected structure
+    """
+    if not isinstance(data, dict):
+        return False
+    
+    if "slides" not in data:
+        return False
+    
+    if not isinstance(data["slides"], list):
+        return False
+    
+    # Basic validation of slide structure
+    for slide in data["slides"]:
+        if not isinstance(slide, dict):
+            return False
+        if "title" not in slide or "content" not in slide:
+            return False
+        if not isinstance(slide["title"], str):
+            return False
+        if not isinstance(slide["content"], list):
+            return False
+    
+    return True
+
+
 PRESENTATION_ROUTER = APIRouter(prefix="/presentation", tags=["Presentation"])
 
 
@@ -532,25 +600,12 @@ async def generate_presentation_handler(
                     (request.n_slides - needed_toc_count) / 10
                 )
 
-            # Retry logic for outline generation
-            # Retry logic for outline generation and parsing
+            # Improved retry logic for outline generation
             presentation_outlines_json = None
-            for attempt in range(3):  # Retry up to 3 times
+            max_attempts = 3
+            
+            for attempt in range(max_attempts):
                 presentation_outlines_text = ""
-                async for chunk in generate_ppt_outline(
-                    request.content,
-                    n_slides_to_generate,
-                    request.language,
-                    additional_context,
-                    request.tone.value,
-                    request.verbosity.value,
-                    request.instructions,
-                    request.include_title_slide,
-                    request.web_search,
-                ):
-                    if isinstance(chunk, HTTPException):
-                        raise chunk
-                    presentation_outlines_text += chunk
                 try:
                     async for chunk in generate_ppt_outline(
                         request.content,
@@ -567,47 +622,50 @@ async def generate_presentation_handler(
                             raise chunk
                         presentation_outlines_text += chunk
 
+                    # Check if we got valid content
                     if presentation_outlines_text.strip():
-                        break  # Exit loop if we have content
+                        print(f"Attempt {attempt + 1} received content, length: {len(presentation_outlines_text)}")
+                        
+                        # Try to parse and validate the JSON
+                        try:
+                            presentation_outlines_json = extract_json_from_response(presentation_outlines_text)
+                            
+                            # Validate the structure
+                            if validate_presentation_outlines(presentation_outlines_json):
+                                print(f"Successfully parsed and validated JSON on attempt {attempt + 1}")
+                                break  # Success - exit retry loop
+                            else:
+                                print(f"Invalid structure on attempt {attempt + 1}")
+                                presentation_outlines_json = None  # Reset for retry
+                        
+                        except Exception as parse_error:
+                            print(f"JSON parsing failed on attempt {attempt + 1}: {parse_error}")
+                            presentation_outlines_json = None  # Reset for retry
                     
-                    print(f"Outline generation failed on attempt {attempt + 1}. Retrying...")
-                    await asyncio.sleep(1) # Wait a second before retrying
-                
-                    if not presentation_outlines_text.strip():
-                            if presentation_outlines_text.strip():
-                                # Attempt to parse as strict JSON first
-                                presentation_outlines_json = dict(json.loads(presentation_outlines_text))
-                                break  # Success, exit retry loop
-                except json.JSONDecodeError:
-                    print(f"Strict JSON parsing failed on attempt {attempt + 1}. Trying with dirtyjson.")
-                    try:
-                        presentation_outlines_json = dict(dirtyjson.loads(presentation_outlines_text))
-                        break # Success with dirtyjson, exit retry loop
-                    except Exception:
-                        print(f"dirtyjson also failed on attempt {attempt + 1}. Retrying generation.")
-                        await asyncio.sleep(2) # Wait before retrying the LLM call
+                    # If we're on the last attempt and still have issues, don't retry
+                    if attempt == max_attempts - 1 and not presentation_outlines_json:
+                        raise HTTPException(
+                            status_code=500, 
+                            detail="Failed to generate valid presentation outlines after multiple attempts. The model may be returning invalid JSON format."
+                        )
+                    
+                    # Wait before retry (except on last attempt)
+                    if attempt < max_attempts - 1 and not presentation_outlines_json:
+                        print(f"Retrying outline generation... Attempt {attempt + 2}/{max_attempts}")
+                        await asyncio.sleep(2)  # Wait 2 seconds before retry
+
+                except HTTPException:
+                    raise  # Re-raise HTTP exceptions immediately
                 except Exception as e:
-                    print(f"An unexpected error occurred during outline generation on attempt {attempt + 1}: {e}")
-                    await asyncio.sleep(2)
+                    print(f"Unexpected error during outline generation attempt {attempt + 1}: {e}")
+                    if attempt == max_attempts - 1:  # Last attempt
+                        raise HTTPException(
+                            status_code=500,
+                            detail="Failed to generate presentation outlines due to an unexpected error."
+                        )
+                    await asyncio.sleep(2)  # Wait before retry
 
-            if not presentation_outlines_json:
-                raise HTTPException(status_code=500, detail="Failed to generate presentation outlines after multiple attempts. The model may be unresponsive or failing to generate content.",
-                    status_code=500, detail="Failed to generate and parse presentation outlines after multiple attempts. The model may be unresponsive or returning malformed data.")
-                
-            try:
-                presentation_outlines_json = dict(
-                    dirtyjson.loads(presentation_outlines_text)
-                )
-            except Exception as e:
-                traceback.print_exc()
-                raise HTTPException(
-                    status_code=400,
-                    detail="Failed to parse presentation outlines from the AI model. Please try again.",
-                )
-
-            presentation_outlines = PresentationOutlineModel(
-                **presentation_outlines_json
-            )
+            presentation_outlines = PresentationOutlineModel(**presentation_outlines_json)
             total_outlines = n_slides_to_generate
 
         else:
@@ -987,10 +1045,4 @@ async def derive_presentation_from_existing_one(
     await sql_session.commit()
 
     presentation_and_path = await export_presentation(
-        new_presentation.id, new_presentation.title or str(uuid.uuid4()), data.export_as
-    )
-
-    return PresentationPathAndEditPath(
-        **presentation_and_path.model_dump(),
-        edit_path=f"/presentation?id={new_presentation.id}",
-    )
+        new_presentation.id, new_presentation

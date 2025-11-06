@@ -16,8 +16,7 @@ def get_system_prompt(
     include_title_slide: bool = True,
 ):
     return f"""
-        You are an expert presentation creator. Generate structured presentations based on user requirements and format them according to the specified JSON schema with markdown content.
-
+        You are an expert presentation J
         Try to use available tools for better results.
 
         {"# User Instruction:" if instructions else ""}
@@ -40,7 +39,8 @@ def get_system_prompt(
         - Even if table of contents is provided, do not generate table of contents slide.
         {"- Always make first slide a title slide." if include_title_slide else "- Do not include title slide in the presentation."}
 
-        **Search web to get latest information about the topic**
+
+        **IMPORTANT: You MUST return ONLY the raw JSON object. Do not include any other text, explanations, or markdown formatting like ```json. Your entire response must be the JSON object itself.**
     """
 
 
