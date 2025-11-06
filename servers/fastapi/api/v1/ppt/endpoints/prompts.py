@@ -238,4 +238,85 @@ const dynamicSlideLayout: React.FC<BulletWithIconsSlideLayoutProps> = ({ data: s
 HTML_EDIT_SYSTEM_PROMPT = """
 You need to edit given html with respect to the indication and sketch in the given UI. You'll be given the code for current UI which is in presentation size, along with its visualization in image form. Over that you'll also be given another image which has indications of what might change in form of sketch in the UI. You will have to return the edited html with tailwind with the changes as indicated on the image and through prompt. Make sure you think through the design before making the change and also make sure you don't change the non-indicated part. Try to follow the design style of current content for generated content. If sketch image is not provided, then you need to edit the html with respect to the prompt. Make sure size of the presentation does not change in any cirsumstance. Only give out code and nothing else.
 """
+# prompts.py
+"""
+This module defines a dynamic prompt template for presentation generation.
+It is designed for systems like Presenton that generate structured slide outlines
+suitable for JSON parsing and HTML/Tailwind rendering.
+"""
 
+def get_presentation_prompt(topic: str, tone: str = "professional") -> str:
+    """
+    Returns a formatted prompt for generating a structured presentation outline.
+
+    Parameters:
+        topic (str): The presentation topic (e.g., "AI in Healthcare", "Climate Change").
+        tone (str): Optional tone/style of the presentation (e.g., "professional", "academic", "creative").
+
+    Returns:
+        str: A full prompt text to send to the AI model.
+    """
+
+    prompt = f"""
+You are an expert presentation planner and content creator.
+
+Your task is to generate a complete, professional slide outline for a presentation on the topic:
+**"{topic}"**
+
+Follow these rules carefully:
+
+1. The output must be in **valid JSON**.
+2. The structure should strictly follow this schema:
+
+{{
+  "presentation_title": "{topic}",
+  "slides": [
+    {{
+      "title": "Slide 1 Title",
+      "content": [
+        "Key bullet point 1",
+        "Key bullet point 2",
+        "Key bullet point 3 (optional)"
+      ]
+    }},
+    {{
+      "title": "Slide 2 Title",
+      "content": [...]
+    }}
+  ]
+}}
+
+3. Each slide must have:
+   - A clear, informative title.
+   - 2–4 concise and meaningful bullet points.
+   - A logical flow from introduction to conclusion.
+
+4. The tone of the presentation should be **{tone}**.
+5. Avoid redundant phrases or filler text.
+6. Keep the language simple, elegant, and presentation-ready.
+7. The JSON will be parsed by a presentation generator, so structure must be correct.
+8. Example structure:
+
+{{
+  "presentation_title": "AI in Healthcare: Complete Overview",
+  "slides": [
+    {{
+      "title": "Introduction to AI in Healthcare",
+      "content": [
+        "Market growth projections for AI adoption in healthcare",
+        "Key transformation areas such as diagnostics, drug discovery, and operations"
+      ]
+    }},
+    {{
+      "title": "Diagnostic Applications",
+      "content": [
+        "AI-based medical imaging analysis (X-rays, MRI, CT)",
+        "Early disease detection using predictive models"
+      ]
+    }}
+  ]
+}}
+
+Return only the JSON output — no explanations or markdown formatting.
+"""
+    return prompt

@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
+from api.v1.ppt.endpoints.prompts import get_presentation_prompt
 from models.llm_message import LLMSystemMessage, LLMUserMessage
 from models.llm_tools import SearchWebTool
 from services.llm_client import LLMClient
@@ -70,6 +71,9 @@ def get_messages(
     instructions: Optional[str] = None,
     include_title_slide: bool = True,
 ):
+    if instructions and "get_presentation_prompt" in instructions.lower():
+        return [LLMUserMessage(content=get_presentation_prompt(content, tone))]
+
     return [
         LLMSystemMessage(
             content=get_system_prompt(
