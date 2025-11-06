@@ -1045,4 +1045,4 @@ async def derive_presentation_from_existing_one(
     await sql_session.commit()
 
     presentation_and_path = await export_presentation(
-        new_presentation.id, new_presentation
+        new_presentation.id, new_presentation)
