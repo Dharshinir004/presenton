@@ -291,7 +291,7 @@ async def prepare_presentation(
                     i + 1 if presentation.include_title_slide else i,
                     toc_slide_layout_index,
                 )
-                toc_outline = f"Table of Contents\n\n"
+                toc_outline = "Table of Contents\n\n"
 
                 for outline in presentation_outline_model.slides[
                     outline_index:outlines_to
@@ -546,7 +546,7 @@ async def check_if_api_request_is_valid(
             template = await sql_session.get(TemplateModel, uuid.UUID(template_id))
             if not template:
                 raise Exception()
-        except Exception as e:
+        except Exception:
             raise HTTPException(
                 status_code=400,
                 detail="Template not found. Please use a valid template.",
@@ -664,8 +664,6 @@ async def generate_presentation_handler(
                             detail="Failed to generate presentation outlines due to an unexpected error."
                         )
                     await asyncio.sleep(2)  # Wait before retry
-
-            presentation_outlines = PresentationOutlineModel(**presentation_outlines_json)
             total_outlines = n_slides_to_generate
 
         else:
@@ -680,7 +678,7 @@ async def generate_presentation_handler(
 
         # Updating async status
         if async_status:
-            async_status.message = f"Selecting layout for each slide"
+            async_status.message = "Selecting layout for each slide"
             async_status.updated_at = datetime.now()
             sql_session.add(async_status)
             await sql_session.commit()
@@ -729,7 +727,7 @@ async def generate_presentation_handler(
                         i + 1 if request.include_title_slide else i,
                         toc_slide_layout_index,
                     )
-                    toc_outline = f"Table of Contents\n\n"
+                    toc_outline = "Table of Contents\n\n"
 
                     for outline in presentation_outlines.slides[
                         outline_index:outlines_to
@@ -914,7 +912,7 @@ async def generate_presentation_sync(
         return await generate_presentation_handler(
             request, presentation_id, None, sql_session
         )
-    except Exception as e:
+    except Exception:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail="Presentation generation failed")
 

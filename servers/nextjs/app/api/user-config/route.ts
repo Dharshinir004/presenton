@@ -4,11 +4,18 @@ import { LLMConfig } from "@/types/llm_config";
 
 const userConfigPath = process.env.USER_CONFIG_PATH!;
 const canChangeKeys = process.env.CAN_CHANGE_KEYS !== "false";
-console.log("UserConfigPath:", userConfigPath);
+
 export async function GET() {
   if (!canChangeKeys) {
     return NextResponse.json({
       error: "You are not allowed to access this resource",
+      status: 403,
+    });
+  }
+  if (!userConfigPath) {
+    return NextResponse.json({
+      error: "User config path not found",
+      status: 500,
     });
   }
 

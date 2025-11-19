@@ -4,9 +4,9 @@ import {
   SquareArrowOutUpRight,
   Play,
   Loader2,
-  Redo2 ,
+  Redo2,
   Undo2,
-  RefreshCcw,
+
 } from "lucide-react";
 import React, { useState } from "react";
 import Wrapper from "@/components/Wrapper";
@@ -73,8 +73,6 @@ const Header = ({
       // Save the presentation data before exporting
       trackEvent(MixpanelEvent.Header_UpdatePresentationContent_API_Call);
       await PresentationGenerationApi.updatePresentationContent(presentationData);
-
-
       trackEvent(MixpanelEvent.Header_GetPptxModel_API_Call);
       const pptx_model = await get_presentation_pptx_model(presentation_id);
       if (!pptx_model) {
@@ -188,28 +186,28 @@ const Header = ({
     <div className="flex flex-col lg:flex-row items-center gap-4">
       {/* undo redo */}
       <button onClick={handleReGenerate} disabled={isStreaming || !presentationData} className="text-white  disabled:opacity-50" >
-      
+
         Re-Generate
       </button>
       <div className="flex items-center gap-2 ">
         <ToolTip content="Undo">
-        <button disabled={!canUndo} className="text-white disabled:opacity-50" onClick={() => {
-          onUndo();
-        }}>
+          <button disabled={!canUndo} className="text-white disabled:opacity-50" onClick={() => {
+            onUndo();
+          }}>
 
-          <Undo2 className="w-6 h-6 " />
-          
-        </button>
-          </ToolTip>
-          <ToolTip content="Redo">
+            <Undo2 className="w-6 h-6 " />
 
-        <button disabled={!canRedo} className="text-white disabled:opacity-50" onClick={() => {
-          onRedo();
-        }}>
-          <Redo2 className="w-6 h-6 " />
-         
-        </button>
-          </ToolTip>
+          </button>
+        </ToolTip>
+        <ToolTip content="Redo">
+
+          <button disabled={!canRedo} className="text-white disabled:opacity-50" onClick={() => {
+            onRedo();
+          }}>
+            <Redo2 className="w-6 h-6 " />
+
+          </button>
+        </ToolTip>
 
       </div>
 

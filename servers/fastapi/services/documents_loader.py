@@ -1,7 +1,7 @@
 import mimetypes
 from fastapi import HTTPException
 import os, asyncio
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 import pdfplumber
 
 from constants.documents import (
@@ -33,10 +33,12 @@ class DocumentsLoader:
 
     async def load_documents(
         self,
-        temp_dir: str,
+        temp_dir: Optional[str] = None,
         load_text: bool = True,
         load_images: bool = False,
     ):
+        """If load_images is True, temp_dir must be provided"""
+
         documents: List[str] = []
         images: List[str] = []
 
@@ -72,7 +74,7 @@ class DocumentsLoader:
         file_path: str,
         load_text: bool,
         load_images: bool,
-        temp_dir: str,
+        temp_dir: Optional[str] = None,
     ) -> Tuple[str, List[str]]:
         image_paths = []
         document: str = ""

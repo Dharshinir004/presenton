@@ -204,6 +204,10 @@ class LLMClient:
             tools=tools,
             extra_body=extra_body,
         )
+
+        if len(response.choices) == 0:
+            return None
+
         tool_calls = response.choices[0].message.tool_calls
         if tool_calls:
             parsed_tool_calls = [
@@ -505,6 +509,9 @@ class LLMClient:
             tools=all_tools,
             extra_body=extra_body,
         )
+
+        if len(response.choices) == 0:
+            return None
 
         content = response.choices[0].message.content
 

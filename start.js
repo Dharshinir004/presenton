@@ -3,14 +3,7 @@
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { spawn } from "child_process";
-import {
-  existsSync,
-  mkdirSync,
-  rmSync,
-  cpSync,
-  readFileSync,
-  writeFileSync,
-} from "fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -111,7 +104,13 @@ const setupUserConfigFromEnv = () => {
 const startServers = async () => {
   const fastApiProcess = spawn(
     "python",
-    ["server.py", "--port", fastapiPort.toString(), "--reload", isDev],
+    [
+      "server.py",
+      "--port",
+      fastapiPort.toString(),
+      "--reload",
+      isDev ? "true" : "false",
+    ],
     {
       cwd: fastapiDir,
       stdio: "inherit",

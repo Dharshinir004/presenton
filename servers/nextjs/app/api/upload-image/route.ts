@@ -21,10 +21,16 @@ export async function POST(request: NextRequest) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
+    if (!userDataDir) {
+      return NextResponse.json(
+        { error: "User data directory not found" },
+        { status: 500 }
+      );
+    }
     // Create uploads directory if it doesn't exist
     const uploadsDir = path.join(userDataDir, "uploads");
     fs.mkdirSync(uploadsDir, { recursive: true });
- 
+
 
     // Generate unique filename
     const filename = `${crypto.randomBytes(16).toString("hex")}.png`;
